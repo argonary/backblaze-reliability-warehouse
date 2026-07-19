@@ -20,3 +20,7 @@ models:
     staging:
       # Staging is a thin, cheap contract over the external Parquet.
       +materialized: view
+    intermediate:
+      # Intermediate models collapse 30M+ drive-days to one row per drive and
+      # are reused by several dims/marts, so persist them as tables.
+      +materialized: table

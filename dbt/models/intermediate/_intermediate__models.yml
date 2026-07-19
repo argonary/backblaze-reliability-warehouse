@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: int_drive_spans
+    description: >
+      One row per drive (serial_number) summarizing its observed lifespan within
+      the loaded data, plus the survival-analysis censoring classification. This
+      is the model where "survival-analysis honesty" lives: it distinguishes a
+      drive that actually FAILED from one that merely stopped appearing (removed,
+      migrated, or decommissioned) and from one that is still under observation.
+      Treating a disappearance as a failure would inflate failure rates; treating
+      an active drive as a survivor would understate risk. Both are avoided here.
+
+      Censoring logic (censoring_status, three mutually exclusive states):
+        - failed: failure_flag = 1 on the drive's last observed day. Backblaze
+          sets failure = 1 only on a drive's final day, after which it disappears.
+        - exited_without_failure: the drive's last_seen is strictly before the
+          dataset's overall max date and it carried no failure flag on that last
+          day. This is a right-censored observation (the drive left the fleet for
+          reasons other than failure) and must NOT be counted as a failure in AFR
+          or survival curves.
+        - active: the drive's last_seen equals the dataset's overall max date, so
+          it was still being observed at the end of the loaded data and its final
+          outcome is unknown (also right-censored, but for a different reason).
+      'failed' is evaluated first, so a drive that fails on the dataset's max date
+      is classified as failed rather than active.
+
+      Grain note: built on stg_drive_stats, whose (serial_number, snapshot_date)
+      grain is clean (0 duplicates verified), so observed_days = count of daily
+      rows = distinct days observed.
+    columns:
+      - name: serial_number
+        description: Drive identity. One row per drive; the grain of this model.
+        tests:
+          - not_null
+          - unique
+      - name: first_seen
+        description: Earliest snapshot_date on which this drive appears in the loaded data.
+        tests:
+          - not_null
+      - name: last_seen
+        description: Latest snapshot_date on which this drive appears. Basis for the censoring classification.
+        tests:
+          - not_null
+      - name: observed_days
+        description: Count of daily observations (rows) for this drive. Equals distinct days observed given the clean grain. Drive-days denominator for AFR.
+        tests:
+          - not_null
+      - name: final_day_failure_flag
+        description: failure_flag on the drive's last_seen date (1 = failed on its final day, else 0).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: censoring_status
+        description: >
+          Survival classification: 'failed', 'exited_without_failure' (censored —
+          left the fleet, not a failure), or 'active' (still observed at dataset
+          max date, censored — outcome unknown).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['failed', 'exited_without_failure', 'active']
