@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: stg_drive_stats
+    description: >
+      Staging contract over raw Backblaze Drive Stats. Selects an explicit,
+      documented column set — the five stable core columns plus the curated
+      predictive S.M.A.R.T. subset (5/187/188/197/198 failure predictors, 9
+      power-on hours, 194 temperature) — rather than SELECT *, so schema drift
+      across quarters is absorbed deliberately: columns absent in a quarter
+      arrive as NULL via union_by_name, and newly added attributes are ignored
+      until deliberately added to this contract. Applies warehouse-convention
+      renames and type casts only. capacity_bytes sentinels (<= 0) are FLAGGED
+      here via is_capacity_sentinel but NOT repaired; repair to modal capacity
+      happens in dim_drive. Grain is serial_number + snapshot_date; any dedupe
+      is deferred to the fact layer where the grain uniqueness test lives.
+    columns:
+      - name: snapshot_date
+        description: Snapshot date of the daily drive observation (cast to DATE). Grain key with serial_number.
+        tests:
+          - not_null
+      - name: serial_number
+        description: Drive identity. Grain key with snapshot_date.
+        tests:
+          - not_null
+      - name: model
+        description: Manufacturer model string (e.g. ST12000NM0008).
+        tests:
+          - not_null
+      - name: capacity_bytes
+        description: >
+          Raw reported capacity in bytes. May be a sentinel (<= 0) — see
+          is_capacity_sentinel. Left as-is here; repaired to the drive's modal
+          capacity in dim_drive.
+      - name: is_capacity_sentinel
+        description: True when capacity_bytes <= 0 (the known -1/0 sentinel quirk). Flag only; repair happens in dim_drive.
+      - name: failure_flag
+        description: 1 on the drive's final observed day, else 0 (cast to TINYINT).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: smart_5_reallocated_sectors_raw
+        description: SMART 5 raw — reallocated sector count. One of Backblaze's five failure predictors.
+      - name: smart_187_reported_uncorrectable_raw
+        description: SMART 187 raw — reported uncorrectable errors. Failure predictor.
+      - name: smart_188_command_timeout_raw
+        description: SMART 188 raw — command timeout. Failure predictor.
+      - name: smart_197_pending_sectors_raw
+        description: SMART 197 raw — current pending sector count. Failure predictor.
+      - name: smart_198_offline_uncorrectable_raw
+        description: SMART 198 raw — offline uncorrectable. Failure predictor.
+      - name: smart_9_power_on_hours_raw
+        description: SMART 9 raw — power-on hours. Drive age; enables vintage/cohort analysis.
+      - name: smart_194_temperature_celsius_raw
+        description: SMART 194 raw — temperature in Celsius. Range-testable for anomaly work.
+      - name: quarter
+        description: Hive partition value (e.g. 2026Q1), derived from the Parquet file path.

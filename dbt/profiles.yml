@@ -1,0 +1,9 @@
+backblaze:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Local dev warehouse (gitignored). Path is relative to the dbt/ working
+      # directory, so always invoke dbt from inside dbt/.
+      path: warehouse.duckdb
+      threads: 4

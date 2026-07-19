@@ -1,0 +1,22 @@
+name: 'backblaze'
+version: '1.0.0'
+config-version: 2
+
+# Profile lives in this same directory (dbt/profiles.yml); run dbt from dbt/.
+profile: 'backblaze'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  backblaze:
+    staging:
+      # Staging is a thin, cheap contract over the external Parquet.
+      +materialized: view

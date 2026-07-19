@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Backblaze Drive Stats landed as Hive-partitioned Parquet by the Phase 1
+      ingestion pipeline (ingest/ingest_quarter.py). Grain is one row per
+      operational drive per day (serial_number + date). dbt reads the external
+      Parquet directly via DuckDB read_parquet with hive_partitioning enabled,
+      which also exposes the `quarter` partition column that is encoded in the
+      file path rather than stored in the files. This is the raw zone: all 197
+      source columns are present and uncurated; the schema-drift column contract
+      is applied downstream in stg_drive_stats.
+    meta:
+      # dbt-duckdb replaces source('raw', <table>) with this expression verbatim.
+      # Path is relative to the dbt/ working directory (repo_root/data/parquet).
+      external_location: "read_parquet('../data/parquet/quarter=*/*.parquet', hive_partitioning = true)"
+    tables:
+      - name: drive_stats
+        description: >
+          Daily S.M.A.R.T. telemetry snapshots, one row per drive per day.
+          Currently loaded: 2026Q1 (30,597,484 rows; CSV=Parquet reconciliation
+          PASS, see docs/reconciliation_log.md). Additional quarters are added
+          in Phase 3.
+        # Freshness is informational for this quarterly, historical dataset:
+        # data lands in quarterly batches, so generous thresholds document the
+        # cadence rather than gate the build. Not part of the dbt build gate.
+        loaded_at_field: "date"
+        freshness:
+          warn_after: {count: 120, period: day}
+          error_after: {count: 400, period: day}
