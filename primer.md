@@ -31,8 +31,7 @@ Last updated: 2026-07-19
 - Gate 1 (dbt build): N/A until Phase 2.
 - Gate 2 (row reconciliation CSV=Parquet): PASS.
 - Gate 7 (benchmarks current): PASS.
-- Gate 8 (defense walkthrough+quiz): NOT DONE — owner still owes the Phase 1
-  defense loop (Section 13) before formally closing the phase.
+- Gate 8 (defense walkthrough+quiz): DONE — completed in review Project 2026-07-19.
 
 ## Exact next action
 Begin Phase 2 (Blueprint Section 5.1): `dbt init` a project under dbt/ with a
