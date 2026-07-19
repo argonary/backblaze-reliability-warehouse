@@ -21,3 +21,4 @@ dominated by test scans over 30.6M rows.
 | 2026-07-19 22:54 | dbt build | 1 | 6 | 7/7 | 13 | Staging only. First run (full parse, no partial-parse cache). |
 | 2026-07-19 22:55 | dbt build | 1 | 6 | 7/7 | 6 | Staging only. Warm parse cache; accepted_values arg-nesting warning cleared. |
 | 2026-07-19 23:07 | dbt build | 2 | 16 | 18/18 | 13 | Added int_drive_spans (table). Model build 2.4s (aggregates 30.6M rows → 351,095 drives). |
+| 2026-07-19 23:49 | dbt build | 5 | 43 | 49/49 | 22 | Added dim_drive/dim_model/dim_date (tables) + seed_manufacturer. dim_drive 11s (2 view scans). First correct run after replacing mode() with max() — see decisions. |

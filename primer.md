@@ -3,61 +3,74 @@ Last updated: 2026-07-19
 
 ## Phase status
 - [x] Phase 1: ingestion, one quarter to parquet, reconciled
-- [~] Phase 2: dbt core — staging + int_drive_spans built & tested. Dims/facts/AFR TODO.
+- [~] Phase 2: dbt core — staging + int_drive_spans + 3 dims built & tested. Facts/AFR mart TODO.
 - [ ] Phase 3: 80M+ rows, incremental, benchmarks
 - [ ] Phase 4: cohort + trend/anomaly marts, findings.md
 - [ ] Phase 5: Power BI dashboard
 - [ ] Phase 6: Databricks target, CI, docs
 
+## Model DAG so far
+raw (parquet source) → stg_drive_stats (view) → int_drive_spans (table)
+                                              ↘ dim_drive (table)
+seed_manufacturer → dim_model (table);  stg → dim_date (table)
+
 ## What was done last session (2026-07-19)
-- Committed the Phase 2 staging scaffold: `1a05f94 feat: dbt project scaffold
-  with parquet sources and staging contract` (dbt project, external Parquet
-  source, stg_drive_stats + tests, docs). Confirmed only intended files staged.
-- Built `int_drive_spans` (Blueprint Section 5.3) — one row per serial_number:
-  - `first_seen` (min date), `last_seen` (max date), `observed_days` (count of
-    daily rows; == distinct days given clean grain), `final_day_failure_flag`,
-    and `censoring_status`.
-  - Censoring logic (survival-analysis honesty; documented fully in the yml):
-    `failed` (failure=1 on last observed day) / `exited_without_failure`
-    (last_seen < dataset max date, no failure → right-censored, NOT a failure) /
-    `active` (last_seen == dataset-wide max date → still observed, outcome
-    unknown). CASE checks `failed` before `active` (failure wins on max date).
-    `active` anchored to dataset-wide max(snapshot_date), not hardcoded.
-  - Materialized as `table` (reused downstream; set in dbt_project.yml
-    `intermediate: +materialized: table`).
-  - Tests: not_null on serial_number/first_seen/last_seen/observed_days/
-    final_day_failure_flag/censoring_status; unique on serial_number;
-    accepted_values on censoring_status (3 values) and final_day_failure_flag
-    (0,1); singular `assert_failure_only_on_last_seen.sql` (every failure row
-    sits on that drive's last_seen).
-- `dbt build` GREEN: PASS=18 (2 models + 16 tests), 0 errors, 0 warnings, ~13s
-  cold / int model build 2.4s. Logged to docs/benchmarks.md.
-- Censoring sanity (Q1 2026), logged to decisions.md: 351,095 drives =
-  345,638 active + 4,427 exited_without_failure + 1,030 failed. `failed`
-  reconciles EXACTLY to the 1,030 raw failures from Phase 1. observed_days 1–90.
+- Committed int_drive_spans checkpoint: `252b53e feat: int_drive_spans
+  intermediate model with censoring logic` (plus the observed_days-vs-span
+  decisions.md line from independent verification). Left check_phase2.py
+  (owner's ad-hoc verify script) untracked on purpose.
+- Built the three dimensions (Blueprint Section 5.4), all materialized as tables:
+  - `dim_drive` (grain serial_number): model FK, REPAIRED capacity_bytes,
+    first_seen/last_seen, drive_days, status. Capacity repair imputes the drive's
+    own non-sentinel capacity, falling back to its model's capacity if all rows
+    were sentinels — guarantees positive capacity.
+  - `dim_model` (grain model): manufacturer parsed from model prefix via
+    seed_manufacturer (longest-prefix LIKE match), capacity_bytes, capacity_class
+    (TB/GB label), fleet_drive_count.
+  - `dim_date` (grain date_day): calendar + quarter attrs via a native DuckDB
+    date spine; quarter_label 'YYYYQn' matches the parquet partition value.
+  - Added seed `seeds/seed_manufacturer.csv` (prefix → manufacturer, 15 rows).
+- Tests: not_null + unique PKs on all three dims; relationships
+  dim_drive.model → dim_model.model; accepted_values on dim_drive.status and
+  dim_date.quarter_number; singular `assert_dim_drive_capacity_positive.sql`
+  (capacity positive after repair, Section 5.7).
+- IMPORTANT FIX: initial dims used `mode()` for capacity/model repair → `dbt
+  build` HUNG (>8 min, killed twice). Root cause: 3 concurrent holistic mode()
+  aggregations over the 30.6M-row staging view. Verified model + non-sentinel
+  capacity are constant per drive/model, so switched to `max()` (== modal here,
+  but streams). Build dropped to ~22s. Logged in decisions.md.
+- `dbt build` GREEN: PASS=49 (5 models + 43 tests + 1 seed), 0 errors, 0
+  warnings, ~22s. Logged to benchmarks.md.
+- Dim sanity (logged): dim_drive 351,095; dim_date 90 days; dim_model 80 models,
+  0 Unknown manufacturer; fleet counts sum to 351,095 (Toshiba 117,902 /
+  Seagate 116,850 / WDC 88,089 / HGST 27,005 / …).
 
 ## Phase 2 validation gates (Section 10) — status so far
-- Gate 1 (dbt build zero errors/failures): PASS (staging + intermediate scope).
-- Gate 2 (row reconciliation raw=parquet=staging): PASS (parity test green).
+- Gate 1 (dbt build zero errors/failures): PASS (through dims).
+- Gate 2 (row reconciliation raw=parquet=staging): PASS.
 - Gate 3 (grain, zero dup serial+date): verified 0 dups; formal grain test lands
-  on fct_drive_daily (Section 5.7). Still pending the fact.
-- Gate 4 (AFR reconciliation): pending mart_model_afr_quarterly.
-- Gate 5 (failure only on last_seen): PASS (assert_failure_only_on_last_seen).
-- Gate 6 (referential integrity fact→dims): pending dims + facts.
+  on fct_drive_daily. Pending the fact.
+- Gate 4 (AFR reconciliation vs published): pending mart_model_afr_quarterly.
+- Gate 5 (failure only on last_seen): PASS.
+- Gate 6 (referential integrity fact→dims): dim_drive→dim_model PASS; fact→dims
+  pending the facts.
 - Gate 7 (benchmarks current): PASS.
 - Gate 8 (defense walkthrough+quiz): pending end of Phase 2.
 
 ## Exact next action
-Build the dimensions (Blueprint Section 5.4), starting with `dim_drive`
-(grain = serial_number): model FK, repaired capacity (modal capacity_bytes,
-fixing the <=0 sentinels flagged in staging via is_capacity_sentinel),
-first/last seen + status + lifetime drive_days (from int_drive_spans). Then
-`dim_model` (manufacturer parsed from model-string prefix — needs a seed mapping
-table) and `dim_date`. Add the singular test "capacity positive after repair"
-on dim_drive (Section 5.7). Run `dbt build`, keep it green; every model needs
-tests + a yml description before it's done.
+Build the facts (Blueprint Section 5.5) — NEXT CHECKPOINT, do not start without
+confirming:
+  - `fct_drive_daily` (grain serial_number + date, `table` in Tier 1; becomes
+    incremental in Phase 3). One row per drive-day; FKs to dim_drive and
+    dim_date; carries failure_flag + curated SMART columns. Add grain-uniqueness
+    test (unique on a surrogate of serial+date) and relationships tests to
+    dim_drive and dim_date (Gate 3 + Gate 6).
+  - `fct_failures` (one row per failure event; `table`).
+Then Section 5.6 mart_model_afr_quarterly + 5.8 AFR reconciliation.
 
 ## Open blockers
-None. Working tree is clean as of the staging commit; int_drive_spans + docs
-updates are UNCOMMITTED (this checkpoint's work). Suggested next commit when
-dims land (Section 11 cadence): `feat: dims and facts with generic test coverage`.
+None. This checkpoint's work (3 dims + seed + docs) is UNCOMMITTED in the
+working tree. check_phase2.py remains untracked. Suggested next commit
+(Section 11 cadence): `feat: dims and facts with generic test coverage` — but
+per instruction that covers dims AND facts, so may wait until facts land, or
+commit dims now as an interim. Ask owner.

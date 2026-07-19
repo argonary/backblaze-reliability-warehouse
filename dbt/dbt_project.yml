@@ -24,3 +24,6 @@ models:
       # Intermediate models collapse 30M+ drive-days to one row per drive and
       # are reused by several dims/marts, so persist them as tables.
       +materialized: table
+    dims:
+      # Dimensions are small and read repeatedly by facts/marts; persist them.
+      +materialized: table

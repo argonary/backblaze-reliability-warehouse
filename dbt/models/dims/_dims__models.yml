@@ -1,0 +1,114 @@
+version: 2
+
+models:
+  - name: dim_drive
+    description: >
+      Drive dimension, one row per physical drive (serial_number). Carries the
+      model foreign key, a REPAIRED capacity, and the drive's observed lifespan
+      and lifecycle status sourced from int_drive_spans. Capacity repair imputes
+      the drive's own non-sentinel capacity_bytes (constant across its life),
+      falling back to the model's capacity when every observation for the drive
+      was a sentinel (<= 0). This is where the capacity_bytes quirk flagged in
+      staging is actually fixed, so capacity is guaranteed positive here (singular
+      test).
+    columns:
+      - name: serial_number
+        description: Drive identity. Grain / primary key of this dimension.
+        tests:
+          - not_null
+          - unique
+      - name: model
+        description: Model string; foreign key to dim_model.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_model')
+                field: model
+      - name: capacity_bytes
+        description: Repaired capacity in bytes (drive modal, else model modal). Always positive.
+        tests:
+          - not_null
+      - name: first_seen
+        description: Earliest snapshot_date this drive appears.
+        tests:
+          - not_null
+      - name: last_seen
+        description: Latest snapshot_date this drive appears.
+        tests:
+          - not_null
+      - name: drive_days
+        description: Count of daily observations for this drive (from int_drive_spans.observed_days). Drive-day contribution for AFR.
+        tests:
+          - not_null
+      - name: status
+        description: Lifecycle status from the censoring classification (failed / exited_without_failure / active).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['failed', 'exited_without_failure', 'active']
+
+  - name: dim_model
+    description: >
+      Model dimension, one row per drive model string. manufacturer is parsed
+      from the model prefix via a longest-prefix match against the
+      seed_manufacturer seed (so 'WDC' beats 'WD'); unmatched models resolve to
+      'Unknown'. capacity_bytes is the model's non-sentinel capacity (constant
+      per model) and capacity_class is a human-readable TB/GB bucket. fleet_drive_count is the
+      number of distinct drives of this model observed in the loaded data.
+    columns:
+      - name: model
+        description: Model string. Grain / primary key of this dimension.
+        tests:
+          - not_null
+          - unique
+      - name: manufacturer
+        description: Manufacturer parsed from the model prefix via seed_manufacturer (or 'Unknown').
+        tests:
+          - not_null
+      - name: capacity_bytes
+        description: Model's non-sentinel capacity in bytes (constant per model).
+        tests:
+          - not_null
+      - name: capacity_class
+        description: Human-readable capacity bucket derived from capacity_bytes (e.g. '16TB', '250GB').
+        tests:
+          - not_null
+      - name: fleet_drive_count
+        description: Distinct drives of this model observed in the loaded data.
+        tests:
+          - not_null
+
+  - name: dim_date
+    description: >
+      Calendar dimension, one row per day covering exactly the loaded data's
+      date range (min..max snapshot_date). Generated with a DuckDB date spine.
+      quarter_label ('YYYYQn') matches the Parquet partition value format so it
+      aligns with the raw partition and quarterly AFR grouping.
+    columns:
+      - name: date_day
+        description: The calendar date. Grain / primary key; foreign key target for facts.
+        tests:
+          - not_null
+          - unique
+      - name: year_number
+        description: Calendar year.
+        tests:
+          - not_null
+      - name: quarter_number
+        description: Calendar quarter (1-4).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4]
+                quote: false
+      - name: quarter_label
+        description: Quarter label 'YYYYQn' (e.g. '2026Q1'); matches the Parquet partition value.
+        tests:
+          - not_null
+      - name: month_number
+        description: Calendar month (1-12).
+        tests:
+          - not_null

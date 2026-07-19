@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: seed_manufacturer
+    description: >
+      Maps a drive model-string prefix to its manufacturer. Consumed by
+      dim_model via a longest-prefix LIKE match (case-sensitive), so a more
+      specific prefix ('WDC') wins over a shorter one ('WD'). Extend this seed
+      as new prefixes surface in docs/schema_drift_log.md.
+    columns:
+      - name: model_prefix
+        description: Case-sensitive leading substring of the model string.
+        tests:
+          - not_null
+          - unique
+      - name: manufacturer
+        description: Manufacturer name assigned to models carrying this prefix.
+        tests:
+          - not_null
