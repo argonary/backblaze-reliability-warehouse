@@ -9,7 +9,8 @@ models:
       power-on hours, 194 temperature) — rather than SELECT *, so schema drift
       across quarters is absorbed deliberately: columns absent in a quarter
       arrive as NULL via union_by_name, and newly added attributes are ignored
-      until deliberately added to this contract. Applies warehouse-convention
+      until deliberately added to this contract (pod_slot_num was added to the
+      contract to support drive_type classification). Applies warehouse-convention
       renames and type casts only. capacity_bytes sentinels (<= 0) are FLAGGED
       here via is_capacity_sentinel but NOT repaired; repair to modal capacity
       happens in dim_drive. Grain is serial_number + snapshot_date; any dedupe
@@ -56,5 +57,11 @@ models:
         description: SMART 9 raw — power-on hours. Drive age; enables vintage/cohort analysis.
       - name: smart_194_temperature_celsius_raw
         description: SMART 194 raw — temperature in Celsius. Range-testable for anomaly work.
+      - name: pod_slot_num
+        description: >
+          Physical slot number of the drive within its storage pod. Populated for
+          data drives (0-59); NULL for boot drives, which sit outside the data
+          slots. dim_model uses this to classify drive_type (data vs boot) — the
+          genuine source attribute behind Backblaze's boot-drive exclusion.
       - name: quarter
         description: Hive partition value (e.g. 2026Q1), derived from the Parquet file path.

@@ -1,19 +1,28 @@
--- One row per drive model string. Adds manufacturer (parsed from the model
--- prefix via the seed_manufacturer mapping), a capacity class label, and the
--- fleet drive count.
+-- One row per (canonical) drive model string. Adds manufacturer (parsed from
+-- the model prefix via the seed_manufacturer mapping), a capacity class label,
+-- the fleet drive count, and drive_type (data vs boot).
+--
+-- Model strings are normalized (WDC prefix stripped, see normalize_model macro)
+-- so the same physical model is not split across rows.
 --
 -- Manufacturer parsing uses a LONGEST-prefix match against the seed so that,
 -- e.g., 'WDC ...' resolves via prefix 'WDC' rather than the shorter 'WD'.
--- Models matching no prefix fall through to 'Unknown' (surfaces new vendors
--- to add to the seed).
+-- Models matching no prefix fall through to 'Unknown' (surfaces new vendors).
+--
+-- drive_type distinguishes DATA drives from BOOT drives using pod_slot_num, a
+-- genuine source attribute: data drives occupy numbered pod slots, boot drives
+-- do not (their slot is NULL). This reproduces Backblaze's boot-drive exclusion
+-- (the correct criterion — it catches boot HDDs too, not just SSDs). A model is
+-- 'data' if the majority of its observations carry a slot, else 'boot'.
 
 with staged as (
 
     select
         serial_number,
-        model,
+        {{ normalize_model('model') }} as model,
         capacity_bytes,
-        is_capacity_sentinel
+        is_capacity_sentinel,
+        pod_slot_num
     from {{ ref('stg_drive_stats') }}
 
 ),
@@ -63,11 +72,16 @@ model_capacity as (
 
 ),
 
-model_fleet as (
+model_stats as (
 
     select
         model,
-        count(distinct serial_number) as fleet_drive_count
+        count(distinct serial_number) as fleet_drive_count,
+        -- 'data' if most observations carry a pod slot, else 'boot'
+        case
+            when count(pod_slot_num) >= 0.5 * count(*) then 'data'
+            else 'boot'
+        end as drive_type
     from staged
     group by model
 
@@ -83,9 +97,10 @@ select
             then cast(cast(round(model_capacity.capacity_bytes / 1e9) as bigint) as varchar) || 'GB'
         else cast(cast(round(model_capacity.capacity_bytes / 1e12) as bigint) as varchar) || 'TB'
     end as capacity_class,
-    model_fleet.fleet_drive_count
+    model_stats.fleet_drive_count,
+    model_stats.drive_type
 from model_manufacturer
 left join model_capacity
     on model_manufacturer.model = model_capacity.model
-inner join model_fleet
-    on model_manufacturer.model = model_fleet.model
+inner join model_stats
+    on model_manufacturer.model = model_stats.model

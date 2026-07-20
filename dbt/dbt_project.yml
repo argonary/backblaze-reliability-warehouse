@@ -31,3 +31,6 @@ models:
       # Facts are tables in Tier 1. fct_drive_daily converts to incremental in
       # Phase 3 (that conversion is the optimization story).
       +materialized: table
+    marts:
+      # Gold layer consumed by Power BI / analysis; persist as tables.
+      +materialized: table

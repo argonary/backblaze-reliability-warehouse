@@ -27,6 +27,7 @@ with source as (
         smart_198_raw,
         smart_9_raw,
         smart_194_raw,
+        pod_slot_num,
         quarter
     from {{ source('raw', 'drive_stats') }}
 
@@ -53,6 +54,10 @@ select
     smart_198_raw as smart_198_offline_uncorrectable_raw,
     smart_9_raw   as smart_9_power_on_hours_raw,
     smart_194_raw as smart_194_temperature_celsius_raw,
+
+    -- operational placement: physical slot in the storage pod. Populated for
+    -- data drives; NULL for boot drives (used to classify drive_type in dim_model)
+    pod_slot_num,
 
     -- hive partition (path-encoded, exposed by hive_partitioning)
     quarter

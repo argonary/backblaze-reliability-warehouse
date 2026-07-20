@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: mart_model_afr_quarterly
+    description: >
+      Gold mart: Annualized Failure Rate (AFR) per drive model per quarter, using
+      Backblaze's published methodology AFR% = failures / (drive_days / 365) * 100.
+      drive_days is the count of drive-day fact rows for the model in the quarter;
+      failures is the count of failure events; drive_count is distinct drives
+      observed. Scoped to DATA drives only (dim_model.drive_type = 'data'),
+      matching Backblaze's HDD Drive Stats scope, which excludes boot drives;
+      the scope uses the dimension attribute, not any model-name special-casing.
+      Only models above Backblaze's published cutoff (drive_count > 100 AND
+      drive_days > 10,000) are included, since smaller populations produce
+      statistically unstable rates. Enriched with manufacturer and capacity_class
+      from dim_model. Reconciled EXACTLY (33/33 models) against Backblaze's
+      published Q1 2026 report in docs/reconciliation_log.md.
+    columns:
+      - name: model_quarter_key
+        description: Surrogate key over the grain (model|quarter_label).
+        tests:
+          - not_null
+          - unique
+      - name: model
+        description: Drive model string. Foreign key to dim_model.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_model')
+                field: model
+      - name: quarter_label
+        description: Quarter the AFR is computed over (e.g. '2026Q1').
+        tests:
+          - not_null
+      - name: manufacturer
+        description: Manufacturer from dim_model.
+        tests:
+          - not_null
+      - name: capacity_class
+        description: Capacity bucket label from dim_model (e.g. '16TB').
+        tests:
+          - not_null
+      - name: drive_count
+        description: Distinct drives of this model observed in the quarter (used for the threshold filter).
+        tests:
+          - not_null
+      - name: drive_days
+        description: Count of drive-day fact rows for this model in the quarter (the AFR denominator basis).
+        tests:
+          - not_null
+      - name: failures
+        description: Count of failure events for this model in the quarter (the AFR numerator).
+        tests:
+          - not_null
+      - name: afr_pct
+        description: >
+          Annualized failure rate as a percentage: failures / (drive_days / 365)
+          * 100, rounded to 2 decimals. A reasonableness bound (0-50) is checked
+          as a WARN, not an error: a real spike on a small population (e.g.
+          ST16000NM000J at 3.61%) is legitimate, not a data defect.
+        tests:
+          - not_null

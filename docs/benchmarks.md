@@ -23,3 +23,5 @@ dominated by test scans over 30.6M rows.
 | 2026-07-19 23:07 | dbt build | 2 | 16 | 18/18 | 13 | Added int_drive_spans (table). Model build 2.4s (aggregates 30.6M rows → 351,095 drives). |
 | 2026-07-19 23:49 | dbt build | 5 | 43 | 49/49 | 22 | Added dim_drive/dim_model/dim_date (tables) + seed_manufacturer. dim_drive 11s (2 view scans). First correct run after replacing mode() with max() — see decisions. |
 | 2026-07-20 00:01 | dbt build | 7 | 58 | 66/66 | 40 | Added fct_drive_daily + fct_failures (tables). Grain-uniqueness test on 30.6M-row drive_day_key ~10s; dim_drive 19s under concurrency. Facts verified to stream (projection 2.2s, write 1.7s). |
+| 2026-07-20 00:16 | dbt build | 8 | 70 | 79/79 | 69 | Added mart_model_afr_quarterly (table) + AFR reasonableness warn-test. 0 warnings. Full Phase 2 build. AFR reconciled 33/33 vs published (reconciliation_log.md). |
+| 2026-07-20 00:46 | dbt build | 8 | 72 | 81/81 | 55 | Upstream fixes: pod_slot_num→dim_model.drive_type, normalize_model macro (WDC/WUH merge). Mart now returns 33 rows / 1.24% directly, no post-hoc scoping. 0 warnings. |

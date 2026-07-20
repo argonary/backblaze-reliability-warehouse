@@ -35,12 +35,13 @@ spans as (
 
 ),
 
--- per-drive model + own non-sentinel capacity (null if the drive was all-sentinel)
+-- per-drive canonical model + own non-sentinel capacity (null if all-sentinel).
+-- model is normalized (WDC prefix stripped) so it matches dim_model's key.
 drive_attrs as (
 
     select
         serial_number,
-        max(model) as model,
+        max({{ normalize_model('model') }}) as model,
         max(case when not is_capacity_sentinel then capacity_bytes end) as drive_capacity_bytes
     from staged
     group by serial_number
@@ -51,11 +52,11 @@ drive_attrs as (
 model_capacity as (
 
     select
-        model,
+        {{ normalize_model('model') }} as model,
         max(capacity_bytes) as model_capacity_bytes
     from staged
     where not is_capacity_sentinel
-    group by model
+    group by {{ normalize_model('model') }}
 
 )
 

@@ -51,15 +51,20 @@ models:
 
   - name: dim_model
     description: >
-      Model dimension, one row per drive model string. manufacturer is parsed
-      from the model prefix via a longest-prefix match against the
-      seed_manufacturer seed (so 'WDC' beats 'WD'); unmatched models resolve to
-      'Unknown'. capacity_bytes is the model's non-sentinel capacity (constant
-      per model) and capacity_class is a human-readable TB/GB bucket. fleet_drive_count is the
-      number of distinct drives of this model observed in the loaded data.
+      Model dimension, one row per canonical drive model string. Model strings
+      are normalized (WD's redundant 'WDC ' prefix stripped via normalize_model)
+      so a model Backblaze labels inconsistently is not split across rows.
+      manufacturer is parsed from the model prefix via a longest-prefix match
+      against the seed_manufacturer seed (so 'WDC' beats 'WD'); unmatched models
+      resolve to 'Unknown'. capacity_bytes is the model's non-sentinel capacity
+      (constant per model) and capacity_class is a human-readable TB/GB bucket.
+      fleet_drive_count is the number of distinct drives observed. drive_type
+      ('data' vs 'boot') is derived from pod_slot_num (data drives occupy pod
+      slots; boot drives do not) and encodes Backblaze's boot-drive exclusion so
+      the AFR mart can scope to data drives via a dimension attribute.
     columns:
       - name: model
-        description: Model string. Grain / primary key of this dimension.
+        description: Canonical (WDC-normalized) model string. Grain / primary key of this dimension.
         tests:
           - not_null
           - unique
@@ -79,6 +84,16 @@ models:
         description: Distinct drives of this model observed in the loaded data.
         tests:
           - not_null
+      - name: drive_type
+        description: >
+          'data' or 'boot', derived from pod_slot_num (data drives occupy
+          numbered pod slots; boot drives have none). Encodes Backblaze's
+          boot-drive exclusion; the AFR mart scopes to drive_type = 'data'.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['data', 'boot']
 
   - name: dim_date
     description: >
