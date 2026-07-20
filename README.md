@@ -40,7 +40,7 @@ Quarterly ZIP  ->  ingest/ingest_quarter.py (Python + DuckDB, no pandas on raw d
 | Phase | Deliverable | Status |
 |---|---|---|
 | 1 | Ingestion ETL: one quarter to partitioned Parquet, reconciled | done |
-| 2 | dbt core: staging, dims, facts, AFR mart, full test suite | build complete, AFR reconciled exactly against Backblaze's published Q1 2026 report; defense writeup in progress |
+| 2 | dbt core: staging, dims, facts, AFR mart, full test suite | build complete, AFR reconciled exactly against Backblaze's published Q1 2026 report|
 | 3 | Scale to 80M+ rows, incremental models, benchmarks | not started |
 | 4 | Cohort survival and trend/anomaly marts, findings | not started |
 | 5 | Power BI star-schema dashboard | not started |
