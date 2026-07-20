@@ -22,3 +22,4 @@ dominated by test scans over 30.6M rows.
 | 2026-07-19 22:55 | dbt build | 1 | 6 | 7/7 | 6 | Staging only. Warm parse cache; accepted_values arg-nesting warning cleared. |
 | 2026-07-19 23:07 | dbt build | 2 | 16 | 18/18 | 13 | Added int_drive_spans (table). Model build 2.4s (aggregates 30.6M rows → 351,095 drives). |
 | 2026-07-19 23:49 | dbt build | 5 | 43 | 49/49 | 22 | Added dim_drive/dim_model/dim_date (tables) + seed_manufacturer. dim_drive 11s (2 view scans). First correct run after replacing mode() with max() — see decisions. |
+| 2026-07-20 00:01 | dbt build | 7 | 58 | 66/66 | 40 | Added fct_drive_daily + fct_failures (tables). Grain-uniqueness test on 30.6M-row drive_day_key ~10s; dim_drive 19s under concurrency. Facts verified to stream (projection 2.2s, write 1.7s). |

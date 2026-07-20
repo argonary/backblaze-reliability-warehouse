@@ -27,3 +27,7 @@ models:
     dims:
       # Dimensions are small and read repeatedly by facts/marts; persist them.
       +materialized: table
+    facts:
+      # Facts are tables in Tier 1. fct_drive_daily converts to incremental in
+      # Phase 3 (that conversion is the optimization story).
+      +materialized: table

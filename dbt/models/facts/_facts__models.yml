@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: fct_drive_daily
+    description: >
+      Central fact at drive-day grain (serial_number + snapshot_date): one row
+      per operational drive per day. Foreign keys to dim_drive (serial_number)
+      and dim_date (snapshot_date -> date_day). Carries the failure event flag
+      and the curated predictive SMART measures from staging. Materialized as a
+      table in Tier 1; becomes incremental in Phase 3. The grain-uniqueness test
+      (Gate 3) lives here, deferred from staging by design.
+    columns:
+      - name: drive_day_key
+        description: Surrogate key over the grain (serial_number|snapshot_date). Enforces grain uniqueness.
+        tests:
+          - not_null
+          - unique
+      - name: serial_number
+        description: Drive identity; foreign key to dim_drive.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drive')
+                field: serial_number
+      - name: snapshot_date
+        description: Observation date; foreign key to dim_date.date_day.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: failure_flag
+        description: 1 on the drive's final observed day, else 0.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: smart_5_reallocated_sectors_raw
+        description: SMART 5 raw — reallocated sector count (failure predictor).
+      - name: smart_187_reported_uncorrectable_raw
+        description: SMART 187 raw — reported uncorrectable errors (failure predictor).
+      - name: smart_188_command_timeout_raw
+        description: SMART 188 raw — command timeout (failure predictor).
+      - name: smart_197_pending_sectors_raw
+        description: SMART 197 raw — current pending sector count (failure predictor).
+      - name: smart_198_offline_uncorrectable_raw
+        description: SMART 198 raw — offline uncorrectable (failure predictor).
+      - name: smart_9_power_on_hours_raw
+        description: SMART 9 raw — power-on hours (drive age).
+      - name: smart_194_temperature_celsius_raw
+        description: SMART 194 raw — temperature in Celsius.
+
+  - name: fct_failures
+    description: >
+      One row per failure event, built from stg_drive_stats where failure_flag =
+      1 (each such row is a drive's final-day failure). Carries the SMART sensor
+      readings as of the failure day. Foreign keys to dim_drive (serial_number)
+      and dim_date (failure_date -> date_day). Each drive fails at most once, so
+      serial_number is unique; the row count reconciles exactly with
+      int_drive_spans censoring_status = 'failed' (1,030 for Q1 2026).
+    columns:
+      - name: failure_event_key
+        description: Surrogate key (serial_number|failure_date). One per failure event.
+        tests:
+          - not_null
+          - unique
+      - name: serial_number
+        description: Drive identity; foreign key to dim_drive. Unique here (one failure per drive).
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_drive')
+                field: serial_number
+      - name: failure_date
+        description: The drive's failure day (its last observed day); foreign key to dim_date.date_day.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: smart_5_reallocated_sectors_raw
+        description: SMART 5 raw at failure — reallocated sector count.
+      - name: smart_187_reported_uncorrectable_raw
+        description: SMART 187 raw at failure — reported uncorrectable errors.
+      - name: smart_188_command_timeout_raw
+        description: SMART 188 raw at failure — command timeout.
+      - name: smart_197_pending_sectors_raw
+        description: SMART 197 raw at failure — current pending sector count.
+      - name: smart_198_offline_uncorrectable_raw
+        description: SMART 198 raw at failure — offline uncorrectable.
+      - name: smart_9_power_on_hours_raw
+        description: SMART 9 raw at failure — power-on hours.
+      - name: smart_194_temperature_celsius_raw
+        description: SMART 194 raw at failure — temperature in Celsius.
